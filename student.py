@@ -205,17 +205,20 @@ class Student:
         btn_frame = Frame(DataLeft,bd=2,relief=RIDGE,bg="white")
         btn_frame.place(x=0,y=470,width=650,height=38)
 
-        btn_Add = Button(btn_frame,text="Save",command=self.add_data,font=("arial",11,"bold"), width=17,bg="blue", fg="white")
+        btn_Add = Button(btn_frame,text="Save",command=self.add_data,font=("arial",11,"bold"), width=11,bg="blue", fg="white")
         btn_Add.grid(row=0,column=0,padx=1)
 
-        btn_update = Button(btn_frame,text="Update",command=self.update_data,font=("arial",11,"bold"), width=17,bg="blue", fg="white")
+        btn_update = Button(btn_frame,text="Update",command=self.update_data,font=("arial",11,"bold"), width=11,bg="blue", fg="white")
         btn_update.grid(row=0,column=1,padx=1)
 
-        btn_delete = Button(btn_frame,text="Delete",command=self.delete_data,font=("arial",11,"bold"), width=17,bg="blue", fg="white")
+        btn_delete = Button(btn_frame,text="Delete",command=self.delete_data,font=("arial",11,"bold"), width=11,bg="blue", fg="white")
         btn_delete.grid(row=0,column=2,padx=1)
 
-        btn_reset = Button(btn_frame,text="Reset",command=self.reset_data,font=("arial",11,"bold"), width=17,bg="blue", fg="white")
+        btn_reset = Button(btn_frame,text="Reset",command=self.reset_data,font=("arial",11,"bold"), width=11,bg="blue", fg="white")
         btn_reset.grid(row=0,column=3,padx=1)
+
+        btn_delete_course = Button(btn_frame,text="Delete Course",command=self.delete_course_and_update_gpa,font=("arial",11,"bold"), width=13,bg="blue", fg="white")
+        btn_delete_course.grid(row=0,column=4,padx=1)
 
 
 
@@ -549,10 +552,12 @@ class Student:
 
     #delete
     def delete_data(self):
+        
         if (self.var_std_id.get() == "" ):
             messagebox.showerror("Error", "All fields are required")
         else:
             try:
+                selected_item = self.student_table.selection()[0]
                 Delete = messagebox.askyesno("Delete","Are you want to delete this student")
                 if Delete > 0:
                     conn = mysql.connector.connect(host="localhost",username="root",password="Duongcuong2141", database="qlsv")
@@ -566,9 +571,62 @@ class Student:
                 conn.commit()
                 self.fetch_data()
                 conn.close()
+                self.student_table.delete(selected_item)
                 messagebox.showinfo("Delete","Your data is deleted",parent=self.root)
+                self.fetch_data()
             except Exception as es:
                 messagebox.showerror("Error",f"Due to:{str(es)}",parent=self.root)
+
+    def delete_course_and_update_gpa(self):
+     try:
+        conn = mysql.connector.connect(host="localhost", username="root", password="Duongcuong2141", database="qlsv")
+        my_cursor = conn.cursor()
+        
+        student_id = self.var_std_id.get()
+        course_name = self.var_course.get()
+        
+        # Xóa môn học của sinh viên
+        delete_query = "DELETE FROM student_courses WHERE StudentID=%s AND CourseName=%s"
+        my_cursor.execute(delete_query, (student_id, course_name))
+        
+        # Lấy tất cả các điểm của sinh viên còn lại
+        select_query = "SELECT Grade FROM student_courses WHERE StudentID=%s"
+        my_cursor.execute(select_query, (student_id,))
+        grades = [row[0] for row in my_cursor.fetchall()]
+        
+        if grades:
+            # Tính lại GPA
+            gpa = sum(grades) / len(grades)
+            
+            # Quy đổi GPA sang hệ số 4
+            gpa_4_scale = (gpa / 10) * 4
+            
+            # Kiểm tra trạng thái học bổng
+            scholarship = "Có" if gpa_4_scale >= 3.6 else "Không"
+            
+            # Cảnh báo nếu GPA quá thấp
+            if gpa_4_scale <= 2.3:
+                messagebox.showwarning("Cảnh báo", f"GPA của sinh viên {student_id} quá thấp: {gpa_4_scale}")
+            
+            # Cập nhật GPA và trạng thái học bổng
+            update_query = "UPDATE student SET gpa=%s, scholarship=%s WHERE StudentID=%s"
+            my_cursor.execute(update_query, (gpa_4_scale, scholarship, student_id))
+        #else:
+            # Nếu không còn môn học nào, đặt GPA và học bổng về giá trị mặc định
+            # update_query = "UPDATE student SET gpa=%s, scholarship=%s WHERE StudentID=%s"
+            # my_cursor.execute(update_query, (0, "Không", student_id))
+        
+        conn.commit()
+        conn.close()
+        
+        # Làm mới dữ liệu hiển thị
+        self.fetch_data()
+        
+        messagebox.showinfo("Success", "Course deleted and GPA updated", parent=self.root)
+        
+     except Exception as es:
+        messagebox.showerror("Error", f"Due to: {str(es)}", parent=self.root)
+
 
     #reset
     def reset_data(self):
